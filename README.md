@@ -50,6 +50,9 @@ until all required values are present and valid.
 Relies on existing adapter config: `DISCORD_BOT_TOKEN`, `DISCORD_ALLOWED_USERS`,
 `DISCORD_ALLOWED_CHANNELS`, `DISCORD_ALLOW_BOTS=all`, and
 `DISCORD_FREE_RESPONSE_CHANNELS` containing every discussion channel.
+Every discussion starter must also be present in `DISCORD_ALLOWED_USERS` (or
+authorized by an equivalent Discord adapter policy), because adapter intake
+authorization runs before the plugin hook.
 
 Discussion-specific variables:
 
@@ -133,7 +136,8 @@ multi-engine determinism fuzz.
 - *Nothing happens on `discuss:`* — discussion mode is likely disabled: check
   that all required `DISCORD_DISCUSSION_*` values are set, participant IDs are
   distinct, and the plugin is listed in `plugins.enabled`. Startup logs one line
-  saying enabled or disabled.
+  saying enabled or disabled. Also confirm the starter is admitted by
+  `DISCORD_ALLOWED_USERS`; the plugin cannot override adapter authorization.
 - *Bots ignore each other* — set `DISCORD_ALLOW_BOTS=all` and confirm the channel
   is in `DISCORD_ALLOWED_CHANNELS`, `DISCORD_FREE_RESPONSE_CHANNELS`, and
   `DISCORD_DISCUSSION_CHANNELS`.
