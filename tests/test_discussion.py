@@ -369,6 +369,25 @@ def test_happy_path_completes_all_turns_in_order():
     assert [c.author for c in gw.contributions] == ["bot-a", "bot-b", "bot-a", "bot-b"]
 
 
+def test_back_to_back_discussions_start_without_waiting_for_timeout():
+    rng = random.Random(2)
+    gw = _Gateway(rng, dup_prob=0.0, max_jitter=0.0)
+    for b in BOTS[:2]:
+        gw.engines.append((b, DiscussionEngine(
+            make_config(b, BOTS[:2], max_turns=2, timeout=10_000))))
+
+    gw.inject_human(STARTER, "discuss: first", ts=0.0)
+    gw.run()
+    assert [c.author for c in gw.contributions] == ["bot-a", "bot-b"]
+    assert all(not engine._sessions[CH].active for _, engine in gw.engines)
+
+    gw.inject_human(STARTER, "discuss: second", ts=10.0)
+    gw.run()
+    assert [c.author for c in gw.contributions] == [
+        "bot-a", "bot-b", "bot-a", "bot-b"]
+    assert all(not engine._sessions[CH].active for _, engine in gw.engines)
+
+
 def test_duplicate_delivery_no_double_contribution():
     rng = random.Random(7)
     gw = _Gateway(rng, dup_prob=0.95, max_jitter=0.0)

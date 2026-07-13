@@ -329,7 +329,14 @@ class DiscussionEngine:
         # our turn index cannot regress if the same or a later event re-enters.
         session.responded_indices.add(index)
         session.seen_participant_msg_ids.add(f"self:{index}")
-        return Decision("rewrite", "my turn", self._build_prompt(session, index))
+        prompt = self._build_prompt(session, index)
+        # Discord does not echo a bot's own message back through its adapter.
+        # Close locally when claiming the final slot; peers close when they
+        # observe the marked contribution. Otherwise the final author rejects
+        # the next discussion trigger until timeout.
+        if index + 1 >= cfg.max_turns:
+            session.active = False
+        return Decision("rewrite", "my turn", prompt)
 
     # -- helpers --------------------------------------------------------------
     def _already_processed(self, message_id: str) -> bool:

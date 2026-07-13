@@ -11,6 +11,8 @@ discuss: What is the safest driver onboarding plan for next week?
 
 and the configured Hermes bots contribute automatically, in a deterministic
 order, one turn each, stopping on the turn limit, a timeout, or `stop discussion`.
+The final-turn author closes its local session immediately, so a new
+`discuss:` session can start without waiting for the previous timeout.
 
 ## How it works (and what it is not)
 
