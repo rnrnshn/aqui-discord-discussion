@@ -1,0 +1,40 @@
+name: aqui-discord-discussion
+label: AQUI Discord Discussion
+kind: standalone
+version: 0.1.0
+description: >
+  Controlled, visible bot-to-bot discussion sessions for AQUI Hermes Discord
+  bots. Adds a pre_gateway_dispatch turn-gate on top of the shipped Discord
+  adapter (discord-platform); it does not replace or modify that adapter.
+author: AQUI
+provides_hooks:
+  - pre_gateway_dispatch
+# All configuration is optional at load time: when required values are missing
+# the plugin loads but discussion mode stays disabled and normal owner-bound
+# behavior is unaffected. Real values live in each profile's local secret
+# configuration and must never be committed.
+optional_env:
+  - name: DISCORD_DISCUSSION_SELF_BOT_ID
+    description: This profile's own Discord bot user ID (used to detect its turn).
+    password: false
+  - name: DISCORD_DISCUSSION_PARTICIPANT_BOT_IDS
+    description: Ordered, distinct, comma-separated participant Discord bot user IDs.
+    password: false
+  - name: DISCORD_DISCUSSION_CHANNELS
+    description: Comma-separated channel IDs permitted to host discussion sessions.
+    password: false
+  - name: DISCORD_DISCUSSION_ALLOWED_STARTERS
+    description: Comma-separated human Discord user IDs allowed to start/stop sessions.
+    password: false
+  - name: DISCORD_DISCUSSION_TRIGGER_PREFIX
+    description: "Text prefix that starts a discussion (default: discuss:)."
+    password: false
+  - name: DISCORD_DISCUSSION_STOP_PHRASE
+    description: "Text that stops an active discussion (default: stop discussion)."
+    password: false
+  - name: DISCORD_DISCUSSION_MAX_TURNS
+    description: "Maximum bot messages per discussion (default 4, capped at 20)."
+    password: false
+  - name: DISCORD_DISCUSSION_SESSION_TIMEOUT_SECONDS
+    description: "Maximum discussion duration in seconds (default 300, 30..1800)."
+    password: false
