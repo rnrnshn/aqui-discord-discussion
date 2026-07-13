@@ -23,6 +23,10 @@ order, one turn each, stopping on the turn limit, a timeout, or `stop discussion
   adapter, and its own full Hermes brain (memory/tools/persona). There is no
   central service and no shared database — turn coordination is deterministic
   local in-memory state (see "Determinism" below).
+- Every real contribution starts with a compact `[[AQD:<session>:<turn>]]`
+  marker. Only a correctly marked contribution for the active session and
+  expected turn advances the protocol. Hermes lifecycle notices, busy messages,
+  compression warnings, and stale responses are dropped before agent dispatch.
 - It does **not** touch `aqui-discord-mcp` (`dmcp`), send DMs, or expose admin
   operations.
 
@@ -117,7 +121,9 @@ python3 tests/test_discussion.py     # or: pytest tests/
 ```
 
 Covers config validation, every authorization/loop-protection rule, and the
-multi-engine determinism fuzz.
+multi-engine determinism fuzz. It also reproduces Hermes lifecycle-message noise
+and verifies that unmarked, stale-session, and wrong-turn bot messages cannot
+advance or trigger a discussion.
 
 ## Operations
 
