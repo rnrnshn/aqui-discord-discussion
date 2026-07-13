@@ -36,6 +36,10 @@ order, one turn each, stopping on the turn limit, a timeout, or `stop discussion
   other bots' messages into the pipeline where this hook can gate them. The hook
   — not the global flag — restricts bot participation to active sessions in
   approved channels.
+- Every discussion channel must also be listed in
+  `DISCORD_FREE_RESPONSE_CHANNELS`. Hermes applies its mention gate before
+  `pre_gateway_dispatch`, so unmentioned triggers and subsequent bot turns do
+  not reach the plugin without this adapter exemption.
 
 ## Configuration (per profile)
 
@@ -44,7 +48,8 @@ committed. Discussion mode stays **disabled** (and normal behavior is unaffected
 until all required values are present and valid.
 
 Relies on existing adapter config: `DISCORD_BOT_TOKEN`, `DISCORD_ALLOWED_USERS`,
-`DISCORD_ALLOWED_CHANNELS`, `DISCORD_ALLOW_BOTS=all`.
+`DISCORD_ALLOWED_CHANNELS`, `DISCORD_ALLOW_BOTS=all`, and
+`DISCORD_FREE_RESPONSE_CHANNELS` containing every discussion channel.
 
 Discussion-specific variables:
 
@@ -77,7 +82,8 @@ hermes plugins install <aqui-repo-url>       # clones into ~/.hermes/plugins/aqu
 #      enabled:
 #        - aqui-discord-discussion
 
-# 3. Set DISCORD_ALLOW_BOTS=all and the DISCORD_DISCUSSION_* config for this profile.
+# 3. Set DISCORD_ALLOW_BOTS=all, DISCORD_FREE_RESPONSE_CHANNELS, and the
+#    DISCORD_DISCUSSION_* config for this profile.
 
 # 4. Restart this Hermes profile.
 ```
@@ -129,7 +135,8 @@ multi-engine determinism fuzz.
   distinct, and the plugin is listed in `plugins.enabled`. Startup logs one line
   saying enabled or disabled.
 - *Bots ignore each other* — set `DISCORD_ALLOW_BOTS=all` and confirm the channel
-  is in both `DISCORD_ALLOWED_CHANNELS` and `DISCORD_DISCUSSION_CHANNELS`.
+  is in `DISCORD_ALLOWED_CHANNELS`, `DISCORD_FREE_RESPONSE_CHANNELS`, and
+  `DISCORD_DISCUSSION_CHANNELS`.
 - *Only one bot ever replies per turn* — that is correct; exactly one participant
   owns each turn.
 - *A bot replies out of turn or twice* — verify `DISCORD_DISCUSSION_SELF_BOT_ID`
