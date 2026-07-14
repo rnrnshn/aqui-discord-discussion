@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.4 - 2026-07-14
+
+### Fixed
+
+- Bots are explicitly restricted to their own identity, perspective, and assigned role.
+- A participant may no longer simulate, predict, label, or write another bot's future response.
+- Validation, disagreement, counterarguments, and named future roles are reserved for later turns.
+
+### Validated
+
+- The proposer/validator prompt contract is covered alongside all marker, lifecycle-noise, determinism, and consecutive-session regressions.
+
 ## v0.1.3 - 2026-07-14
 
 ### Changed
