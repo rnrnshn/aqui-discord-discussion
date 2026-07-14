@@ -30,6 +30,9 @@ The final-turn author closes its local session immediately, so a new
   Only a correctly marked contribution for the active session and expected turn
   advances the protocol. Hermes lifecycle notices, busy messages, compression
   warnings, and stale responses are dropped before agent dispatch.
+- Each turn is role-isolated: a bot speaks only as its own Hermes identity and
+  must leave named roles, validation, disagreement, and future contributions to
+  the participants that own those later turns.
 - It does **not** touch `aqui-discord-mcp` (`dmcp`), send DMs, or expose admin
   operations.
 
@@ -90,7 +93,7 @@ hermes plugins install https://github.com/rnrnshn/aqui-discord-discussion
 # 2. Pin the production checkout to the validated release
 PLUGIN_DIR="${HERMES_HOME:-$HOME/.hermes}/plugins/aqui-discord-discussion"
 git -C "$PLUGIN_DIR" fetch --tags
-git -C "$PLUGIN_DIR" checkout v0.1.3
+git -C "$PLUGIN_DIR" checkout v0.1.4
 
 # 3. Enable it (user plugins are opt-in) in this profile's config.yaml:
 #    plugins:
@@ -192,6 +195,6 @@ advance or trigger a discussion.
 
 - MVP: discussion sessions only. Bot-owned DM handling is a separate, later
   phase and is deliberately out of scope here.
-- Version `0.1.3` preserves the validated live two-profile, two-turn canary and
-  hides coordination markers with Discord spoilers. Longer sessions remain
-  disabled pending additional live testing.
+- Version `0.1.4` preserves the validated live two-profile, two-turn canary,
+  hides coordination markers with Discord spoilers, and isolates each bot's
+  assigned role. Longer sessions remain disabled pending additional live testing.

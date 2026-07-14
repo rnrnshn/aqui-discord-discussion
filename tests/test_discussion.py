@@ -174,6 +174,37 @@ def test_valid_trigger_starts_and_first_participant_takes_turn():
     assert d2.action == "skip"             # bot-b waits
 
 
+def test_prompt_reserves_other_participant_roles_for_later_turns():
+    proposer = DiscussionEngine(make_config("bot-a", ["bot-a", "bot-b"], max_turns=2))
+    validator = DiscussionEngine(make_config("bot-b", ["bot-a", "bot-b"], max_turns=2))
+    topic = "discuss: OliBot proposes and Coll validates; Coll should explain disagreement"
+
+    proposal = feed(
+        proposer, author=STARTER, is_bot=False, text=topic, now=0, mid="roles")
+    waiting = feed(
+        validator, author=STARTER, is_bot=False, text=topic, now=0, mid="roles")
+
+    assert proposal.action == "rewrite"
+    assert waiting.action == "skip"
+    assert "Speak only as your current Hermes identity" in proposal.text
+    assert "perform only the role assigned to you" in proposal.text
+    assert "Never simulate, predict, quote, summarize, label, or write another participant's response" in proposal.text
+    assert "Leave validation, disagreement, counterarguments, and future roles to later turns" in proposal.text
+    assert "one independent perspective only" in proposal.text
+
+    validation = feed(
+        validator,
+        author="bot-a",
+        is_bot=True,
+        text=marked(validator, 0, "OliBot proposal only"),
+        now=1,
+        mid="proposal",
+    )
+    assert validation.action == "rewrite"
+    assert "Recent visible transcript:" in validation.text
+    assert "bot: OliBot proposal only" in validation.text
+
+
 # ── active session turn gating ───────────────────────────────────────────────
 
 def test_non_participant_bot_ignored_mid_session():
