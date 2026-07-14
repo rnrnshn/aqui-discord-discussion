@@ -24,9 +24,9 @@ cause two bots to claim the same slot.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
-import hashlib
 import re
 from collections import deque
 from dataclasses import dataclass, field
@@ -51,15 +51,19 @@ TRANSCRIPT_MAX_CHARS_PER_LINE = 300
 # defense-in-depth second line so a replayed trigger can never restart a
 # completed session even if the adapter's guard is bypassed.
 PROCESSED_ID_CAP = 1024
-TURN_MARKER_RE = re.compile(r"^\[\[AQD:([0-9a-f]{12}):(\d+)\]\](?:\s*\n)?")
+TURN_MARKER_RE = re.compile(
+    r"^(?P<spoiler>\|\|)?\[\[AQD:([0-9a-f]{12}):(\d+)\]\]"
+    r"(?(spoiler)\|\|)(?!\|\|)(?:[ \t]*\n)?"
+)
 
 
 def _session_id(trigger_message_id: str) -> str:
     return hashlib.sha256(trigger_message_id.encode("utf-8")).hexdigest()[:12]
 
 
-def format_turn_marker(session_id: str, index: int) -> str:
-    return f"[[AQD:{session_id}:{index}]]"
+def format_turn_marker(session_id: str, index: int, *, spoiler: bool = True) -> str:
+    marker = f"[[AQD:{session_id}:{index}]]"
+    return f"||{marker}||" if spoiler else marker
 
 
 def _split_ids(raw: Optional[str]) -> List[str]:
@@ -293,9 +297,9 @@ class DiscussionEngine:
         expected_index = len(session.seen_participant_msg_ids)
         if not marker:
             return Decision("skip", "unmarked participant message")
-        if marker.group(1) != session.session_id:
+        if marker.group(2) != session.session_id:
             return Decision("skip", "wrong discussion session")
-        if int(marker.group(2)) != expected_index:
+        if int(marker.group(3)) != expected_index:
             return Decision("skip", "wrong discussion turn")
         contribution = text[marker.end():].strip()
         if not contribution:

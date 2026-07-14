@@ -170,6 +170,7 @@ def test_valid_trigger_starts_and_first_participant_takes_turn():
     assert "onboarding plan" in d1.text
     assert "Turn: 1 of 2" in d1.text
     assert format_turn_marker(first._sessions[CH].session_id, 0) in d1.text
+    assert "||[[AQD:" in d1.text
     assert d2.action == "skip"             # bot-b waits
 
 
@@ -267,6 +268,29 @@ def test_wrong_session_or_turn_marker_does_not_advance():
     assert wrong_session.reason == "wrong discussion session"
     assert wrong_turn.reason == "wrong discussion turn"
     assert not engine._sessions[CH].seen_participant_msg_ids
+
+
+def test_plain_v012_marker_remains_accepted_for_rollback():
+    engine = DiscussionEngine(make_config("bot-b", ["bot-a", "bot-b"]))
+    feed(engine, author=STARTER, is_bot=False, text="discuss: t", now=0, mid="s")
+    session = engine._sessions[CH]
+    legacy = format_turn_marker(session.session_id, 0, spoiler=False)
+    d = feed(engine, author="bot-a", is_bot=True, text=f"{legacy}\nhello",
+             now=1, mid="legacy")
+    assert d.action == "rewrite"
+
+
+def test_partially_wrapped_spoiler_markers_are_rejected():
+    engine = DiscussionEngine(make_config("bot-b", ["bot-a", "bot-b"]))
+    feed(engine, author=STARTER, is_bot=False, text="discuss: t", now=0, mid="s")
+    session = engine._sessions[CH]
+    plain = format_turn_marker(session.session_id, 0, spoiler=False)
+    for i, malformed in enumerate((f"||{plain}", f"{plain}||")):
+        d = feed(engine, author="bot-a", is_bot=True,
+                 text=f"{malformed}\nhello", now=i + 1, mid=f"malformed-{i}")
+        assert d.action == "skip"
+        assert d.reason == "unmarked participant message"
+    assert not session.seen_participant_msg_ids
 
 
 # ── multi-engine adversarial determinism fuzz (ported from the PoC) ──────────

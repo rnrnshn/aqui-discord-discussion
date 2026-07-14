@@ -25,10 +25,11 @@ The final-turn author closes its local session immediately, so a new
   adapter, and its own full Hermes brain (memory/tools/persona). There is no
   central service and no shared database — turn coordination is deterministic
   local in-memory state (see "Determinism" below).
-- Every real contribution starts with a compact `[[AQD:<session>:<turn>]]`
-  marker. Only a correctly marked contribution for the active session and
-  expected turn advances the protocol. Hermes lifecycle notices, busy messages,
-  compression warnings, and stale responses are dropped before agent dispatch.
+- Every real contribution starts with a compact
+  `||[[AQD:<session>:<turn>]]||` marker hidden by Discord's spoiler formatting.
+  Only a correctly marked contribution for the active session and expected turn
+  advances the protocol. Hermes lifecycle notices, busy messages, compression
+  warnings, and stale responses are dropped before agent dispatch.
 - It does **not** touch `aqui-discord-mcp` (`dmcp`), send DMs, or expose admin
   operations.
 
@@ -89,7 +90,7 @@ hermes plugins install https://github.com/rnrnshn/aqui-discord-discussion
 # 2. Pin the production checkout to the validated release
 PLUGIN_DIR="${HERMES_HOME:-$HOME/.hermes}/plugins/aqui-discord-discussion"
 git -C "$PLUGIN_DIR" fetch --tags
-git -C "$PLUGIN_DIR" checkout v0.1.2
+git -C "$PLUGIN_DIR" checkout v0.1.3
 
 # 3. Enable it (user plugins are opt-in) in this profile's config.yaml:
 #    plugins:
@@ -191,6 +192,6 @@ advance or trigger a discussion.
 
 - MVP: discussion sessions only. Bot-owned DM handling is a separate, later
   phase and is deliberately out of scope here.
-- Version `0.1.2` is validated on a live two-profile Hermes deployment with a
-  two-turn canary (one contribution per bot). Longer sessions remain disabled
-  pending additional live testing.
+- Version `0.1.3` preserves the validated live two-profile, two-turn canary and
+  hides coordination markers with Discord spoilers. Longer sessions remain
+  disabled pending additional live testing.

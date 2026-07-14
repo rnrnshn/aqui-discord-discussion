@@ -1,7 +1,7 @@
 name: aqui-discord-discussion
 label: AQUI Discord Discussion
 kind: standalone
-version: 0.1.2
+version: 0.1.3
 description: >
   Controlled, visible bot-to-bot discussion sessions for AQUI Hermes Discord
   bots. Adds a pre_gateway_dispatch turn-gate on top of the shipped Discord
