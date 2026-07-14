@@ -86,23 +86,44 @@ right-click a user/bot/channel → "Copy ID".
 # 1. Install the plugin into this profile's Hermes home
 hermes plugins install https://github.com/rnrnshn/aqui-discord-discussion
 
-# 2. Enable it (user plugins are opt-in) in this profile's config.yaml:
+# 2. Pin the production checkout to the validated release
+PLUGIN_DIR="${HERMES_HOME:-$HOME/.hermes}/plugins/aqui-discord-discussion"
+git -C "$PLUGIN_DIR" fetch --tags
+git -C "$PLUGIN_DIR" checkout v0.1.2
+
+# 3. Enable it (user plugins are opt-in) in this profile's config.yaml:
 #    plugins:
 #      enabled:
 #        - aqui-discord-discussion
 
-# 3. Set DISCORD_ALLOW_BOTS=all, DISCORD_FREE_RESPONSE_CHANNELS, and the
+# 4. Set DISCORD_ALLOW_BOTS=all, DISCORD_FREE_RESPONSE_CHANNELS, and the
 #    DISCORD_DISCUSSION_* config for this profile.
 
-# 4. Restart this Hermes profile.
+# 5. Restart this Hermes profile.
 ```
 
 Adding another bot later is configuration only: run its Hermes profile with its
 own token, install + enable the plugin, set the IDs, restart that profile. No
 code change and no `dmcp` restart.
 
-Pin the plugin version in the shared repo and roll installs forward with
-`hermes plugins update` to avoid version drift across profiles.
+Keep every participating profile on the same tag. `hermes plugins update`
+performs `git pull` and is intended for branch-based installations; do not use
+it for production profiles pinned to a release tag.
+
+### Upgrade A Pinned Profile
+
+```bash
+PLUGIN_DIR="${HERMES_HOME:-$HOME/.hermes}/plugins/aqui-discord-discussion"
+git -C "$PLUGIN_DIR" fetch --tags
+git -C "$PLUGIN_DIR" checkout <new-version-tag>
+hermes gateway restart
+```
+
+Run the test suite before restarting the gateway:
+
+```bash
+python3 "$PLUGIN_DIR/tests/test_discussion.py"
+```
 
 ## Determinism (why no Redis)
 
@@ -136,6 +157,10 @@ advance or trigger a discussion.
   (or set `DISCORD_ALLOW_BOTS=none`) and restart the profile. Behavior reverts to
   normal owner-bound chat. `hermes plugins uninstall aqui-discord-discussion`
   removes it entirely.
+- **Version rollback:** set `DISCORD_ALLOW_BOTS=none`, disable the plugin, check
+  out the previous validated tag, run its tests, then re-enable and restart one
+  profile at a time. For `v0.1.2`, which is the first release, the rollback is
+  to leave the plugin disabled.
 - **Sessions are in-memory:** restarting a profile ends its active sessions by
   design (no unsafe recovery).
 
