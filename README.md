@@ -74,6 +74,7 @@ Discussion-specific variables:
 | `DISCORD_DISCUSSION_ALLOWED_STARTERS` | yes | — | Comma-separated human user IDs allowed to start/stop. |
 | `DISCORD_DISCUSSION_TRIGGER_PREFIX` | no | `discuss:` | Text prefix that starts a session. |
 | `DISCORD_DISCUSSION_STOP_PHRASE` | no | `stop discussion` | Text that stops a session. |
+| `DISCORD_DISCUSSION_STATUS_PHRASE` | no | `discussion status` | Approved-human command for bounded session metadata. |
 | `DISCORD_DISCUSSION_MAX_TURNS` | no | `4` | Total bot messages per session (capped at 20). |
 | `DISCORD_DISCUSSION_SESSION_TIMEOUT_SECONDS` | no | `300` | Session duration (clamped to 30..1800). |
 
@@ -93,7 +94,7 @@ hermes plugins install https://github.com/rnrnshn/aqui-discord-discussion
 # 2. Pin the production checkout to the validated release
 PLUGIN_DIR="${HERMES_HOME:-$HOME/.hermes}/plugins/aqui-discord-discussion"
 git -C "$PLUGIN_DIR" fetch --tags
-git -C "$PLUGIN_DIR" checkout v0.1.4
+git -C "$PLUGIN_DIR" checkout v0.2.0
 
 # 3. Enable it (user plugins are opt-in) in this profile's config.yaml:
 #    plugins:
@@ -154,6 +155,14 @@ advance or trigger a discussion.
 
 ## Operations
 
+- **Session status:** an approved starter may post `discussion status` in an
+  approved channel. Only participant slot 1 replies. The response contains
+  active/inactive state, a hashed session ID, turn count, next participant slot,
+  and expiry; it never includes the topic or transcript.
+- **Metadata logs:** discussion decisions record action, reason, channel,
+  hashed session ID, active state, bounded turn counts, next slot, expiry, and
+  whether the author was a bot or human. Prompts, responses, tokens, and message
+  bodies are never logged.
 - **Token rotation:** rotate the bot token in the profile's secret config, then
   restart only that Hermes profile. Tokens are never read or logged by this
   plugin.
@@ -195,6 +204,7 @@ advance or trigger a discussion.
 
 - MVP: discussion sessions only. Bot-owned DM handling is a separate, later
   phase and is deliberately out of scope here.
-- Version `0.1.4` preserves the validated live two-profile, two-turn canary,
-  hides coordination markers with Discord spoilers, and isolates each bot's
-  assigned role. Longer sessions remain disabled pending additional live testing.
+- Version `0.2.0` preserves the validated live two-profile, two-turn canary,
+  hidden markers, and role isolation while adding metadata-only observability
+  and `discussion status`. Longer sessions remain disabled pending additional
+  live testing.
