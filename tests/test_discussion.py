@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from session import (  # noqa: E402
     DEFAULT_MAX_TURNS, MAX_TURNS_CAP, MAX_TIMEOUT_SECONDS, MIN_TIMEOUT_SECONDS,
-    DiscussionConfig, DiscussionEngine,
+    DiscussionConfig, DiscussionEngine, format_turn_marker,
 )
 
 CH = "chan-discuss"
@@ -47,7 +47,12 @@ def make_config(self_bot_id, participants, *, max_turns=4, timeout=300,
 
 def feed(engine, *, author, is_bot, text, now, mid="m", name="", channel=CH):
     return engine.decide(channel_id=channel, author_id=author, author_name=name,
-                         is_bot=is_bot, message_id=mid, text=text, now=now)
+                          is_bot=is_bot, message_id=mid, text=text, now=now)
+
+
+def marked(engine, index, text):
+    session = engine._sessions[CH]
+    return f"{format_turn_marker(session.session_id, index)}\n{text}"
 
 
 # ── config loading ───────────────────────────────────────────────────────────
@@ -164,6 +169,7 @@ def test_valid_trigger_starts_and_first_participant_takes_turn():
     assert d1.action == "rewrite"          # bot-a is participant[0] → its turn
     assert "onboarding plan" in d1.text
     assert "Turn: 1 of 2" in d1.text
+    assert format_turn_marker(first._sessions[CH].session_id, 0) in d1.text
     assert d2.action == "skip"             # bot-b waits
 
 
@@ -188,7 +194,8 @@ def test_expected_turn_only():
     engine = DiscussionEngine(make_config("bot-b", ["bot-a", "bot-b"], max_turns=2))
     feed(engine, author=STARTER, is_bot=False, text="discuss: t", now=0, mid="s")
     # bot-a posts turn 1 → now it's bot-b's turn.
-    d = feed(engine, author="bot-a", is_bot=True, text="a1", now=1, mid="a1")
+    d = feed(engine, author="bot-a", is_bot=True,
+             text=marked(engine, 0, "a1"), now=1, mid="a1")
     assert d.action == "rewrite"
     assert "Turn: 2 of 2" in d.text
 
@@ -197,9 +204,11 @@ def test_max_turns_ends_session():
     engine = DiscussionEngine(make_config("bot-a", ["bot-a", "bot-b"], max_turns=2))
     # start → bot-a turn1 (index0, self:0). observe bot-b turn2 (index1).
     feed(engine, author=STARTER, is_bot=False, text="discuss: t", now=0, mid="s")
-    feed(engine, author="bot-b", is_bot=True, text="b1", now=1, mid="b1")
+    feed(engine, author="bot-b", is_bot=True,
+         text=marked(engine, 1, "b1"), now=1, mid="b1")
     # index is now 2 == max_turns → any further participant msg ends it.
-    d = feed(engine, author="bot-b", is_bot=True, text="b2", now=2, mid="b2")
+    d = feed(engine, author="bot-b", is_bot=True,
+             text=marked(engine, 2, "b2"), now=2, mid="b2")
     assert d.action == "skip"
     assert engine._sessions[CH].active is False
 
@@ -231,13 +240,42 @@ def test_unauthorized_stop_ignored():
     assert engine._sessions[CH].active is True
 
 
+def test_unmarked_participant_status_does_not_advance_turn():
+    engine = DiscussionEngine(make_config("bot-b", ["bot-a", "bot-b"]))
+    feed(engine, author=STARTER, is_bot=False, text="discuss: t", now=0, mid="s")
+    for i, status in enumerate((
+            "Interrupting current task.",
+            "Operation interrupted: waiting for model response.",
+            "Codex context auto-compaction changed.",
+    )):
+        d = feed(engine, author="bot-a", is_bot=True, text=status,
+                 now=i + 1, mid=f"noise-{i}")
+        assert d.action == "skip"
+        assert d.reason == "unmarked participant message"
+    assert not engine._sessions[CH].seen_participant_msg_ids
+
+
+def test_wrong_session_or_turn_marker_does_not_advance():
+    engine = DiscussionEngine(make_config("bot-b", ["bot-a", "bot-b"]))
+    feed(engine, author=STARTER, is_bot=False, text="discuss: t", now=0, mid="s")
+    wrong_session = feed(
+        engine, author="bot-a", is_bot=True,
+        text=f"{format_turn_marker('0' * 12, 0)}\nhello", now=1, mid="wrong-session")
+    wrong_turn = feed(
+        engine, author="bot-a", is_bot=True,
+        text=marked(engine, 3, "hello"), now=2, mid="wrong-turn")
+    assert wrong_session.reason == "wrong discussion session"
+    assert wrong_turn.reason == "wrong discussion turn"
+    assert not engine._sessions[CH].seen_participant_msg_ids
+
+
 # ── multi-engine adversarial determinism fuzz (ported from the PoC) ──────────
 
 class _Msg:
-    __slots__ = ("id", "author", "is_bot", "ts")
+    __slots__ = ("id", "author", "is_bot", "ts", "text")
 
-    def __init__(self, mid, author, is_bot, ts):
-        self.id, self.author, self.is_bot, self.ts = mid, author, is_bot, ts
+    def __init__(self, mid, author, is_bot, ts, text=""):
+        self.id, self.author, self.is_bot, self.ts, self.text = mid, author, is_bot, ts, text
 
 
 class _Gateway:
@@ -277,13 +315,17 @@ class _Gateway:
 
     def _deliver(self, engine, msg, now):
         self_id = next(sid for sid, e in self.engines if e is engine)
-        text = "discuss: fuzz topic" if not msg.is_bot else "contribution"
+        text = "discuss: fuzz topic" if not msg.is_bot else msg.text
         text = getattr(self, "_human_text", {}).get(msg.id, text)
         d = engine.decide(channel_id=CH, author_id=msg.author, author_name=msg.author,
                           is_bot=msg.is_bot, message_id=str(msg.id), text=text, now=now)
         if d.action == "rewrite":
             # This engine took its turn → it posts a contribution as itself.
-            out = _Msg(self.next_id, self_id, True, now)
+            session = engine._sessions[CH]
+            index = len(session.seen_participant_msg_ids) - 1
+            out = _Msg(
+                self.next_id, self_id, True, now,
+                f"{format_turn_marker(session.session_id, index)}\ncontribution")
             self.next_id += 1
             self.post(out)
 
