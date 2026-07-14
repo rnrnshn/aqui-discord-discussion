@@ -44,6 +44,7 @@ DEFAULT_MAX_TURNS = 4
 DEFAULT_TIMEOUT_SECONDS = 300
 DEFAULT_TRIGGER_PREFIX = "discuss:"
 DEFAULT_STOP_PHRASE = "stop discussion"
+DEFAULT_STATUS_PHRASE = "discussion status"
 TRANSCRIPT_MAX_LINES = 8
 TRANSCRIPT_MAX_CHARS_PER_LINE = 300
 # Bound on the engine's own message-id dedup memory. The shipped Discord
@@ -87,6 +88,7 @@ class DiscussionConfig:
     allowed_starters: frozenset
     trigger_prefix: str = DEFAULT_TRIGGER_PREFIX
     stop_phrase: str = DEFAULT_STOP_PHRASE
+    status_phrase: str = DEFAULT_STATUS_PHRASE
     max_turns: int = DEFAULT_MAX_TURNS
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS
     enabled: bool = False
@@ -102,6 +104,7 @@ class DiscussionConfig:
 
         trigger = (env.get("DISCORD_DISCUSSION_TRIGGER_PREFIX") or DEFAULT_TRIGGER_PREFIX).strip()
         stop = (env.get("DISCORD_DISCUSSION_STOP_PHRASE") or DEFAULT_STOP_PHRASE).strip()
+        status = (env.get("DISCORD_DISCUSSION_STATUS_PHRASE") or DEFAULT_STATUS_PHRASE).strip()
 
         max_turns = _clamp_int(
             env.get("DISCORD_DISCUSSION_MAX_TURNS"), DEFAULT_MAX_TURNS, 1, MAX_TURNS_CAP)
@@ -115,7 +118,7 @@ class DiscussionConfig:
         distinct = len(set(participants)) == len(participants)
         enabled = bool(
             self_bot_id and participants and distinct and channels and starters
-            and trigger and stop)
+            and trigger and stop and status)
 
         if participants and not distinct:
             logger.warning(
@@ -132,6 +135,7 @@ class DiscussionConfig:
             allowed_starters=starters,
             trigger_prefix=trigger,
             stop_phrase=stop,
+            status_phrase=status,
             max_turns=max_turns,
             timeout_seconds=timeout,
             enabled=enabled,
@@ -160,6 +164,16 @@ class Session:
     responded_indices: set = field(default_factory=set)
     transcript: List[str] = field(default_factory=list)
     active: bool = True
+
+
+@dataclass(frozen=True)
+class SessionStatus:
+    active: bool
+    session_id: str
+    turn_count: int
+    max_turns: int
+    next_participant_slot: Optional[int]
+    expires_in_seconds: int
 
 
 @dataclass(frozen=True)
@@ -192,6 +206,35 @@ class DiscussionEngine:
         self._sessions: Dict[str, Session] = {}
         self._processed_ids: set = set()
         self._processed_order: deque = deque()
+
+    def status(self, channel_id: str, now: float) -> SessionStatus:
+        session = self._sessions.get(channel_id)
+        self._expire_if_needed(session, now)
+        if session is None:
+            return SessionStatus(
+                active=False,
+                session_id="",
+                turn_count=0,
+                max_turns=self.config.max_turns,
+                next_participant_slot=None,
+                expires_in_seconds=0,
+            )
+
+        turn_count = len(session.seen_participant_msg_ids)
+        active = session.active and turn_count < self.config.max_turns
+        next_slot = None
+        if active:
+            next_slot = turn_count % len(self.config.participant_bot_ids) + 1
+        return SessionStatus(
+            active=active,
+            session_id=session.session_id,
+            turn_count=turn_count,
+            max_turns=self.config.max_turns,
+            next_participant_slot=next_slot,
+            expires_in_seconds=(
+                max(0, int(session.expires_at - now)) if active else 0
+            ),
+        )
 
     def decide(self, *, channel_id: str, author_id: str, author_name: str,
                is_bot: bool, message_id: str, text: str, now: float) -> Decision:

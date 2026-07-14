@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.2.0 - 2026-07-14
+
+### Added
+
+- Approved humans can request bounded metadata with `discussion status`.
+- Only participant slot 1 answers status requests, preventing duplicate replies.
+- Session decisions emit metadata-only logs with no prompts, responses, tokens, or message bodies.
+- Status tracks active state, hashed session ID, turn count, next participant slot, and expiry.
+
+### Validated
+
+- 33 tests cover status authorization, primary-only replies, bounded rendering, expiry, completed sessions, and log privacy alongside all existing protocol regressions.
+
 ## v0.1.4 - 2026-07-14
 
 ### Fixed

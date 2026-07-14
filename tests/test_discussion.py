@@ -14,16 +14,41 @@ Runnable with pytest, or directly: ``python3 tests/test_discussion.py``.
 
 from __future__ import annotations
 
+import asyncio
 import heapq
+import importlib.util
+import io
+import logging
 import os
 import random
 import sys
+from datetime import datetime
+from types import SimpleNamespace
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+
+plugin_spec = importlib.util.spec_from_file_location(
+    "aqd_test_plugin",
+    os.path.join(ROOT, "__init__.py"),
+    submodule_search_locations=[ROOT],
+)
+plugin_module = importlib.util.module_from_spec(plugin_spec)
+sys.modules["aqd_test_plugin"] = plugin_module
+plugin_spec.loader.exec_module(plugin_module)
 
 from session import (  # noqa: E402
     DEFAULT_MAX_TURNS, MAX_TURNS_CAP, MAX_TIMEOUT_SECONDS, MIN_TIMEOUT_SECONDS,
     DiscussionConfig, DiscussionEngine, format_turn_marker,
+)
+from aqd_test_plugin.hook import (  # noqa: E402
+    _render_status,
+    make_pre_gateway_dispatch_hook,
+)
+from aqd_test_plugin.session import (  # noqa: E402
+    DiscussionConfig as HookDiscussionConfig,
+    DiscussionEngine as HookDiscussionEngine,
+    SessionStatus as HookSessionStatus,
 )
 
 CH = "chan-discuss"
@@ -76,6 +101,7 @@ def test_from_env_enabled_and_clamped():
         "DISCORD_DISCUSSION_ALLOWED_STARTERS": "u1",
         "DISCORD_DISCUSSION_MAX_TURNS": "9999",
         "DISCORD_DISCUSSION_SESSION_TIMEOUT_SECONDS": "1",
+        "DISCORD_DISCUSSION_STATUS_PHRASE": "debate status",
     }
     cfg = DiscussionConfig.from_env(env)
     assert cfg.enabled is True
@@ -83,6 +109,7 @@ def test_from_env_enabled_and_clamped():
     assert cfg.max_turns == MAX_TURNS_CAP           # clamped down
     assert cfg.timeout_seconds == MIN_TIMEOUT_SECONDS  # clamped up
     assert cfg.discussion_channels == frozenset({"c1", "c2"})
+    assert cfg.status_phrase == "debate status"
 
 
 def test_from_env_disabled_on_duplicate_participants():
@@ -441,6 +468,180 @@ def test_back_to_back_discussions_start_without_waiting_for_timeout():
     assert [c.author for c in gw.contributions] == [
         "bot-a", "bot-b", "bot-a", "bot-b"]
     assert all(not engine._sessions[CH].active for _, engine in gw.engines)
+
+
+def test_session_status_tracks_active_completed_and_expired_sessions():
+    first = DiscussionEngine(make_config("bot-a", ["bot-a", "bot-b"], max_turns=2))
+    empty = first.status(CH, now=0)
+    assert empty.active is False
+    assert empty.session_id == ""
+    assert empty.turn_count == 0
+
+    feed(first, author=STARTER, is_bot=False,
+         text="discuss: status", now=10, mid="status-session")
+    active = first.status(CH, now=20)
+    assert active.active is True
+    assert active.session_id
+    assert active.turn_count == 1
+    assert active.max_turns == 2
+    assert active.next_participant_slot == 2
+    assert active.expires_in_seconds == 290
+
+    second = DiscussionEngine(make_config("bot-b", ["bot-a", "bot-b"], max_turns=2))
+    feed(second, author=STARTER, is_bot=False,
+         text="discuss: status", now=10, mid="status-session")
+    feed(second, author="bot-a", is_bot=True,
+         text=marked(second, 0, "proposal"), now=20, mid="proposal")
+    completed = second.status(CH, now=21)
+    assert completed.active is False
+    assert completed.turn_count == 2
+    assert completed.next_participant_slot is None
+    assert completed.expires_in_seconds == 0
+
+    expiring = DiscussionEngine(make_config(
+        "bot-b", ["bot-a", "bot-b"], timeout=30))
+    feed(expiring, author=STARTER, is_bot=False,
+         text="discuss: status", now=0, mid="expires")
+    expired = expiring.status(CH, now=31)
+    assert expired.active is False
+    assert expired.expires_in_seconds == 0
+
+
+class _DiscordPlatform:
+    value = "discord"
+
+
+class _FakeAdapter:
+    def __init__(self):
+        self.sent = []
+
+    async def send(self, chat_id, content, reply_to=None, metadata=None):
+        self.sent.append((chat_id, content, reply_to, metadata))
+        return SimpleNamespace(success=True)
+
+
+def _hook_config(self_bot_id):
+    return HookDiscussionConfig(
+        self_bot_id=self_bot_id,
+        participant_bot_ids=["bot-a", "bot-b"],
+        discussion_channels=frozenset({CH}),
+        allowed_starters=frozenset({STARTER}),
+        max_turns=2,
+        timeout_seconds=300,
+        enabled=True,
+    )
+
+
+def _status_event(text="discussion status", *, author=STARTER, channel=CH):
+    platform = _DiscordPlatform()
+    message_id = f"status-{author}-{channel}"
+    source = SimpleNamespace(
+        platform=platform,
+        chat_id=channel,
+        user_id=author,
+        user_name="approved human",
+        is_bot=False,
+        message_id=message_id,
+        thread_id=None,
+    )
+    return SimpleNamespace(
+        source=source,
+        text=text,
+        message_id=message_id,
+        timestamp=datetime.fromtimestamp(20),
+    )
+
+
+def test_status_command_replies_only_from_first_participant():
+    async def scenario():
+        event = _status_event()
+        primary_adapter = _FakeAdapter()
+        peer_adapter = _FakeAdapter()
+        primary_gateway = SimpleNamespace(
+            adapters={event.source.platform: primary_adapter})
+        peer_gateway = SimpleNamespace(
+            adapters={event.source.platform: peer_adapter})
+        primary_hook = make_pre_gateway_dispatch_hook(
+            HookDiscussionEngine(_hook_config("bot-a")))
+        peer_hook = make_pre_gateway_dispatch_hook(
+            HookDiscussionEngine(_hook_config("bot-b")))
+
+        primary_result = primary_hook(event=event, gateway=primary_gateway)
+        peer_result = peer_hook(event=event, gateway=peer_gateway)
+        await asyncio.sleep(0)
+
+        assert primary_result == {
+            "action": "skip", "reason": "discussion status handled"}
+        assert peer_result == {
+            "action": "skip", "reason": "discussion status handled"}
+        assert len(primary_adapter.sent) == 1
+        assert primary_adapter.sent[0][0] == CH
+        assert primary_adapter.sent[0][1] == "No active discussion in this channel."
+        assert primary_adapter.sent[0][2] == f"status-{STARTER}-{CH}"
+        assert peer_adapter.sent == []
+
+    asyncio.run(scenario())
+
+
+def test_status_rendering_is_bounded_and_contains_no_transcript():
+    active = _render_status(HookSessionStatus(
+        active=True,
+        session_id="abc123def456",
+        turn_count=1,
+        max_turns=2,
+        next_participant_slot=2,
+        expires_in_seconds=275,
+    ))
+    completed = _render_status(HookSessionStatus(
+        active=False,
+        session_id="abc123def456",
+        turn_count=2,
+        max_turns=2,
+        next_participant_slot=None,
+        expires_in_seconds=0,
+    ))
+    assert active == (
+        "Discussion active: session `abc123def456`; turns 1/2; "
+        "next participant slot 2; expires in 275s."
+    )
+    assert completed == (
+        "No active discussion. Last session `abc123def456` ended at 2/2 turns."
+    )
+    assert "topic" not in active.lower()
+    assert "transcript" not in active.lower()
+
+
+def test_status_command_requires_approved_human_and_channel():
+    engine = HookDiscussionEngine(_hook_config("bot-a"))
+    hook = make_pre_gateway_dispatch_hook(engine)
+    gateway = SimpleNamespace(adapters={})
+    assert hook(event=_status_event(author="stranger"), gateway=gateway) is None
+    assert hook(event=_status_event(channel=OTHER), gateway=gateway) is None
+
+
+def test_observability_logs_metadata_without_message_body():
+    engine = HookDiscussionEngine(_hook_config("bot-a"))
+    hook = make_pre_gateway_dispatch_hook(engine)
+    event = _status_event(text="discuss: confidential acquisition strategy")
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    plugin_logger = logging.getLogger("aqui_discord_discussion")
+    previous_level = plugin_logger.level
+    plugin_logger.setLevel(logging.INFO)
+    plugin_logger.addHandler(handler)
+    try:
+        result = hook(event=event, gateway=SimpleNamespace(adapters={}))
+    finally:
+        plugin_logger.removeHandler(handler)
+        plugin_logger.setLevel(previous_level)
+
+    logged = stream.getvalue()
+    assert result["action"] == "rewrite"
+    assert "discussion_event action=rewrite" in logged
+    assert "session=" in logged
+    assert "turns=1/2" in logged
+    assert "author_kind=human" in logged
+    assert "confidential acquisition strategy" not in logged
 
 
 def test_duplicate_delivery_no_double_contribution():

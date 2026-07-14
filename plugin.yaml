@@ -1,7 +1,7 @@
 name: aqui-discord-discussion
 label: AQUI Discord Discussion
 kind: standalone
-version: 0.1.4
+version: 0.2.0
 description: >
   Controlled, visible bot-to-bot discussion sessions for AQUI Hermes Discord
   bots. Adds a pre_gateway_dispatch turn-gate on top of the shipped Discord
@@ -31,6 +31,9 @@ optional_env:
     password: false
   - name: DISCORD_DISCUSSION_STOP_PHRASE
     description: "Text that stops an active discussion (default: stop discussion)."
+    password: false
+  - name: DISCORD_DISCUSSION_STATUS_PHRASE
+    description: "Text that reports bounded session metadata (default: discussion status)."
     password: false
   - name: DISCORD_DISCUSSION_MAX_TURNS
     description: "Maximum bot messages per discussion (default 4, capped at 20)."
