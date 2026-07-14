@@ -84,7 +84,7 @@ right-click a user/bot/channel → "Copy ID".
 
 ```bash
 # 1. Install the plugin into this profile's Hermes home
-hermes plugins install <aqui-repo-url>       # clones into ~/.hermes/plugins/aqui-discord-discussion
+hermes plugins install https://github.com/rnrnshn/aqui-discord-discussion
 
 # 2. Enable it (user plugins are opt-in) in this profile's config.yaml:
 #    plugins:
@@ -166,5 +166,6 @@ advance or trigger a discussion.
 
 - MVP: discussion sessions only. Bot-owned DM handling is a separate, later
   phase and is deliberately out of scope here.
-- Not yet exercised against a live two-profile Hermes integration (plan Phase 3);
-  do not enable for real users until that passes.
+- Version `0.1.2` is validated on a live two-profile Hermes deployment with a
+  two-turn canary (one contribution per bot). Longer sessions remain disabled
+  pending additional live testing.
