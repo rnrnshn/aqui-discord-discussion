@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.1.3 - 2026-07-14
+
+### Changed
+
+- Discussion coordination markers use Discord spoiler formatting so protocol details are hidden unless a user clicks the spoiler.
+- Plain `v0.1.2` markers remain valid for rollback compatibility.
+- Partially wrapped and malformed spoiler markers fail closed.
+
+### Validated
+
+- 27 protocol tests, including marker compatibility, lifecycle-noise, and consecutive-session regressions.
+
+### Known Limitations
+
+- Discord displays a small spoiler block at the start of each contribution.
+- Production remains capped at two turns pending longer-session validation.
+
 ## v0.1.2 - 2026-07-14
 
 First stable canary release.
